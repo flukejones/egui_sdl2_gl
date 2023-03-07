@@ -1,3 +1,4 @@
+use std::f32::consts::PI;
 use std::time::Instant;
 //Alias the backend to something less mouthful
 use egui_backend::egui::{vec2, Color32, Image};
@@ -54,7 +55,7 @@ fn main() {
     // Init egui stuff
     let (mut painter, mut egui_state) =
         egui_backend::with_sdl2(&window, ShaderVersion::Default, DpiScaling::Default);
-    let mut egui_ctx = egui::CtxRef::default();
+    let egui_ctx = egui::Context::default();
     let mut event_pump: sdl2::EventPump = sdl_context.event_pump().unwrap();
     let mut srgba: Vec<Color32> = Vec::new();
 
@@ -105,7 +106,7 @@ fn main() {
             for x in 0..PIC_WIDTH {
                 srgba.push(Color32::BLACK);
                 if y == PIC_HEIGHT - 1 {
-                    let y = amplitude * (angle * 3.142f32 / 180f32 + sine_shift).sin();
+                    let y = amplitude * (angle * PI / 180f32 + sine_shift).sin();
                     let y = PIC_HEIGHT as f32 / 2f32 - y;
                     srgba[(y as i32 * PIC_WIDTH + x) as usize] = Color32::YELLOW;
                     angle += 360f32 / PIC_WIDTH as f32;
@@ -135,38 +136,26 @@ fn main() {
             }
         });
 
-        let (egui_output, paint_cmds) = egui_ctx.end_frame();
+        let full_output = egui_ctx.end_frame();
         // Process ouput
-        egui_state.process_output(&window, &egui_output);
+        egui_state.process_output(&window, &full_output.platform_output);
 
-        let paint_jobs = egui_ctx.tessellate(paint_cmds);
+        let paint_jobs = egui_ctx.tessellate(full_output.shapes);
 
         // Note: passing a bg_color to paint_jobs will clear any previously drawn stuff.
         // Use this only if egui is being used for all drawing and you aren't mixing your own Open GL
         // drawing calls with it.
         // Since we are custom drawing an OpenGL Triangle we don't need egui to clear the background.
-        painter.paint_jobs(None, paint_jobs, &egui_ctx.font_image());
+        painter.paint_jobs(None, paint_jobs, &full_output.textures_delta);
 
         window.gl_swap_window();
 
-        if !egui_output.needs_repaint {
-            if let Some(event) = event_pump.wait_event_timeout(5) {
-                match event {
-                    Event::Quit { .. } => break 'running,
-                    _ => {
-                        // Process input event
-                        egui_state.process_input(&window, event, &mut painter);
-                    }
-                }
-            }
-        } else {
-            for event in event_pump.poll_iter() {
-                match event {
-                    Event::Quit { .. } => break 'running,
-                    _ => {
-                        // Process input event
-                        egui_state.process_input(&window, event, &mut painter);
-                    }
+        for event in event_pump.poll_iter() {
+            match event {
+                Event::Quit { .. } => break 'running,
+                _ => {
+                    // Process input event
+                    egui_state.process_input(&window, event, &mut painter);
                 }
             }
         }

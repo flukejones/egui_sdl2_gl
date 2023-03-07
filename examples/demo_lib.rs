@@ -58,7 +58,7 @@ fn main() {
     let (mut painter, mut egui_state) =
         egui_backend::with_sdl2(&window, ShaderVersion::Default, DpiScaling::Custom(1.25));
     let mut app = egui_demo_lib::WrapApp::default();
-    let mut egui_ctx = egui::CtxRef::default();
+    let mut egui_ctx = egui::Context::default();
     let mut event_pump = sdl_context.event_pump().unwrap();
     let start_time = Instant::now();
     let repaint_signal = Arc::new(Signal::default());
@@ -81,33 +81,20 @@ fn main() {
         });
 
         app.update(&egui_ctx, &mut frame);
-        let (egui_output, paint_cmds) = egui_ctx.end_frame();
+        let full_output = egui_ctx.end_frame();
         // Process ouput
-        egui_state.process_output(&window, &egui_output);
+        egui_state.process_output(&window, &full_output.platform_output);
         // Quite if needed.
         if frame.take_app_output().quit {
             break 'running;
         }
 
-        if !egui_output.needs_repaint {
-            // Reactive every 1 second.
-            if let Some(event) = event_pump.wait_event_timeout(1000) {
-                match event {
-                    Event::Quit { .. } => break 'running,
-                    _ => {
-                        // Process input event
-                        egui_state.process_input(&window, event, &mut painter);
-                    }
-                }
-            }
-        } else {
-            for event in event_pump.poll_iter() {
-                match event {
-                    Event::Quit { .. } => break 'running,
-                    _ => {
-                        // Process input event
-                        egui_state.process_input(&window, event, &mut painter);
-                    }
+        for event in event_pump.poll_iter() {
+            match event {
+                Event::Quit { .. } => break 'running,
+                _ => {
+                    // Process input event
+                    egui_state.process_input(&window, event, &mut painter);
                 }
             }
         }
@@ -120,7 +107,7 @@ fn main() {
         //     window.set_size(w, h).unwrap();
         // }
 
-        let paint_jobs = egui_ctx.tessellate(paint_cmds);
+        let paint_jobs = egui_ctx.tessellate(full_output.shapes);
 
         // An example of how OpenGL can be used to draw custom stuff with egui
         // overlaying it:
@@ -131,7 +118,7 @@ fn main() {
             gl::Clear(gl::COLOR_BUFFER_BIT);
         }
 
-        painter.paint_jobs(None, paint_jobs, &egui_ctx.font_image());
+        painter.paint_jobs(None, paint_jobs, &full_output.textures_delta);
         window.gl_swap_window();
     }
 }

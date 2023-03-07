@@ -9,7 +9,7 @@ use std::mem;
 use std::ptr;
 use std::str;
 
-const VS_SRC: &'static str = "
+const VS_SRC: &str = "
 #version 150
 in vec2 position;
 
@@ -17,7 +17,7 @@ void main() {
     gl_Position = vec4(position, 0.0, 1.0);
 }";
 
-const FS_SRC: &'static str = "
+const FS_SRC: &str = "
 #version 150
 out vec4 out_color;
 
@@ -52,7 +52,7 @@ pub fn compile_shader(src: &str, ty: GLenum) -> GLuint {
             let mut len = 0;
             gl::GetShaderiv(shader, gl::INFO_LOG_LENGTH, &mut len);
             let mut buf = Vec::with_capacity(len as usize);
-            buf.set_len((len as usize) - 1); // subtract 1 to skip the trailing null character
+            // buf.set_len((len as usize) - 1); // subtract 1 to skip the trailing null character
             gl::GetShaderInfoLog(
                 shader,
                 len,
@@ -130,7 +130,7 @@ impl Triangle {
             gl::BufferData(
                 gl::ARRAY_BUFFER,
                 (VERTEX_DATA.len() * mem::size_of::<GLfloat>()) as GLsizeiptr,
-                mem::transmute(&VERTEX_DATA[0]),
+                &VERTEX_DATA[0] as *const f32 as *const std::ffi::c_void,
                 gl::STATIC_DRAW,
             );
 

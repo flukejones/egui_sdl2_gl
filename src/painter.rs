@@ -4,8 +4,11 @@ use crate::ShaderVersion;
 use core::mem;
 use core::ptr;
 use core::str;
+use egui::epaint::ImageDelta;
+use egui::TextureId;
+use egui::TexturesDelta;
 use egui::{
-    epaint::{Color32, FontImage, Mesh},
+    epaint::{Color32, Mesh},
     vec2, ClippedMesh, Pos2, Rect,
 };
 use gl::types::{GLchar, GLenum, GLint, GLsizeiptr, GLsync, GLuint};
@@ -229,7 +232,7 @@ pub struct Painter {
     egui_texture: GLuint,
     // Call fence for sdl vsync so the CPU won't heat up if there's no heavy activity.
     pub gl_sync_fence: GLsync,
-    egui_texture_version: Option<u64>,
+    egui_texture_version: Option<TextureId>,
     user_textures: Vec<Option<UserTexture>>,
     pub pixels_per_point: f32,
     pub canvas_size: (u32, u32),
@@ -432,42 +435,70 @@ impl Painter {
         }
     }
 
-    fn upload_egui_texture(&mut self, texture: &FontImage) {
-        if self.egui_texture_version == Some(texture.version) {
+    fn upload_egui_texture(&mut self, tex_id: TextureId, delta: &ImageDelta) {
+        if self.egui_texture_version == Some(tex_id) {
             return; // No change
         }
 
-        let mut pixels: Vec<u8> = Vec::with_capacity(texture.pixels.len() * 4);
-        for &alpha in &texture.pixels {
-            let srgba = Color32::from_white_alpha(alpha);
-            pixels.push(srgba[0]);
-            pixels.push(srgba[1]);
-            pixels.push(srgba[2]);
-            pixels.push(srgba[3]);
-        }
+        match &delta.image {
+            egui::ImageData::Color(image) => {
+                let mut pixels: Vec<u8> = Vec::with_capacity(image.pixels.len() * 4);
+                for &srgba in &image.pixels {
+                    // let srgba = srgba.;
+                    pixels.push(srgba.r());
+                    pixels.push(srgba.g());
+                    pixels.push(srgba.b());
+                    pixels.push(srgba.a());
+                }
 
-        unsafe {
-            gl::BindTexture(gl::TEXTURE_2D, self.egui_texture);
+                unsafe {
+                    gl::BindTexture(gl::TEXTURE_2D, self.egui_texture);
 
-            let level = 0;
-            let internal_format = gl::RGBA;
-            let border = 0;
-            let src_format = gl::RGBA;
-            let src_type = gl::UNSIGNED_BYTE;
-            gl::TexImage2D(
-                gl::TEXTURE_2D,
-                level,
-                internal_format as i32,
-                texture.width as i32,
-                texture.height as i32,
-                border,
-                src_format,
-                src_type,
-                pixels.as_ptr() as *const c_void,
-            );
+                    let level = 1;
+                    let internal_format = gl::RGBA;
+                    let border = 0;
+                    let src_format = gl::RGBA;
+                    let src_type = gl::UNSIGNED_BYTE;
+                    gl::TexImage2D(
+                        gl::TEXTURE_2D,
+                        level,
+                        internal_format as i32,
+                        image.width() as i32,
+                        image.height() as i32,
+                        border,
+                        src_format,
+                        src_type,
+                        pixels.as_ptr() as *const c_void,
+                    );
+                }
+            }
+            egui::ImageData::Alpha(image) => {
+                let data: Vec<u8> = image.srgba_pixels(1.0).flat_map(|a| a.to_array()).collect();
 
-            self.egui_texture_version = Some(texture.version);
-        }
+                unsafe {
+                    gl::BindTexture(gl::TEXTURE_2D, self.egui_texture);
+
+                    let level = 0;
+                    let internal_format = gl::RGBA;
+                    let border = 0;
+                    let src_format = gl::RGBA;
+                    let src_type = gl::UNSIGNED_BYTE;
+                    gl::TexImage2D(
+                        gl::TEXTURE_2D,
+                        level,
+                        internal_format as i32,
+                        image.width() as i32,
+                        image.height() as i32,
+                        border,
+                        src_format,
+                        src_type,
+                        data.as_ptr() as *const c_void,
+                    );
+                }
+            }
+        };
+
+        self.egui_texture_version = Some(tex_id);
     }
 
     fn upload_user_textures(&mut self) {
@@ -539,7 +570,7 @@ impl Painter {
 
     fn get_texture(&self, texture_id: egui::TextureId) -> Option<GLuint> {
         match texture_id {
-            egui::TextureId::Egui => Some(self.egui_texture),
+            egui::TextureId::Managed(_) => Some(self.egui_texture),
             egui::TextureId::User(id) => {
                 let id = id as usize;
                 if id < self.user_textures.len() {
@@ -554,7 +585,7 @@ impl Painter {
 
     pub fn update_user_texture_data(&mut self, texture_id: egui::TextureId, _pixels: &[Color32]) {
         match texture_id {
-            egui::TextureId::Egui => {}
+            egui::TextureId::Managed(_) => {}
             egui::TextureId::User(id) => {
                 let id = id as usize;
                 assert!(id < self.user_textures.len());
@@ -583,7 +614,7 @@ impl Painter {
         rgba8_pixels: Vec<u8>,
     ) {
         match texture_id {
-            egui::TextureId::Egui => {}
+            egui::TextureId::Managed(_) => {}
             egui::TextureId::User(id) => {
                 let id = id as usize;
                 if id < self.user_textures.len() {
@@ -600,14 +631,17 @@ impl Painter {
         &mut self,
         bg_color: Option<Color32>,
         meshes: Vec<ClippedMesh>,
-        egui_texture: &FontImage,
+        texture_deltas: &TexturesDelta,
     ) {
         unsafe {
             gl::PixelStorei(gl::UNPACK_ROW_LENGTH, 0);
             gl::PixelStorei(gl::UNPACK_ALIGNMENT, 4);
         }
 
-        self.upload_egui_texture(egui_texture);
+        for (id, image_delta) in &texture_deltas.set {
+            self.upload_egui_texture(*id, image_delta);
+        }
+
         self.upload_user_textures();
 
         let (canvas_width, canvas_height) = self.canvas_size;

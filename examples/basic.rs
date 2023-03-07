@@ -40,7 +40,9 @@ fn main() {
     // let shader_ver = ShaderVersion::Adaptive;
     let (mut painter, mut egui_state) =
         egui_backend::with_sdl2(&window, shader_ver, DpiScaling::Custom(2.0));
-    let mut egui_ctx = egui::CtxRef::default();
+
+    let egui_ctx = egui::Context::default();
+
     let mut event_pump = sdl_context.event_pump().unwrap();
 
     let mut test_str: String =
@@ -77,13 +79,14 @@ fn main() {
             ui.add(Checkbox::new(&mut enable_vsync, "Reduce CPU Usage?"));
             ui.separator();
             if ui.button("Quit?").clicked() {
+                dbg!("KJWKEJVBWEFK");
                 quit = true;
             }
         });
 
-        let (egui_output, paint_cmds) = egui_ctx.end_frame();
+        let full_output = egui_ctx.end_frame();
         // Process ouput
-        egui_state.process_output(&window, &egui_output);
+        egui_state.process_output(&window, &full_output.platform_output);
 
         // For default dpi scaling only, Update window when the size of resized window is very small (to avoid egui::CentralPanel distortions).
         // if egui_ctx.used_size() != painter.screen_rect.size() {
@@ -93,7 +96,7 @@ fn main() {
         //     window.set_size(w, h).unwrap();
         // }
 
-        let paint_jobs = egui_ctx.tessellate(paint_cmds);
+        let paint_jobs = egui_ctx.tessellate(full_output.shapes);
 
         // An example of how OpenGL can be used to draw custom stuff with egui
         // overlaying it:
@@ -104,26 +107,14 @@ fn main() {
             gl::Clear(gl::COLOR_BUFFER_BIT);
         }
 
-        if !egui_output.needs_repaint {
-            if let Some(event) = event_pump.wait_event_timeout(5) {
-                match event {
-                    Event::Quit { .. } => break 'running,
-                    _ => {
-                        // Process input event
-                        egui_state.process_input(&window, event, &mut painter);
-                    }
-                }
-            }
-        } else {
-            painter.paint_jobs(None, paint_jobs, &egui_ctx.font_image());
-            window.gl_swap_window();
-            for event in event_pump.poll_iter() {
-                match event {
-                    Event::Quit { .. } => break 'running,
-                    _ => {
-                        // Process input event
-                        egui_state.process_input(&window, event, &mut painter);
-                    }
+        painter.paint_jobs(None, paint_jobs, &full_output.textures_delta);
+        window.gl_swap_window();
+        for event in event_pump.poll_iter() {
+            match event {
+                Event::Quit { .. } => break 'running,
+                _ => {
+                    // Process input event
+                    egui_state.process_input(&window, event, &mut painter);
                 }
             }
         }
