@@ -25,14 +25,12 @@ use {
 pub fn get_frame_time(start_time: Instant) -> f32 {
     (Instant::now() - start_time).as_secs_f64() as f32
 }
+
+#[cfg(feature = "use_epi")]
+#[derive(Default)]
 #[cfg(feature = "use_epi")]
 pub struct Signal;
-#[cfg(feature = "use_epi")]
-impl Default for Signal {
-    fn default() -> Self {
-        Self {}
-    }
-}
+
 #[cfg(feature = "use_epi")]
 use epi::backend::RepaintSignal;
 #[cfg(feature = "use_epi")]
@@ -60,10 +58,11 @@ impl Default for FusedCursor {
     }
 }
 
+#[derive(Debug)]
 pub enum DpiScaling {
     /// Default is handled by sdl2, probably 1.0
     Default,
-    /// Custome DPI scaling, e.g: 0.8, 1.5, 2.0 and so fort.
+    /// Custome DPI scaling, e.g: 0.8, 1.5, 2.0 and so forth.
     Custom(f32),
 }
 
@@ -239,6 +238,7 @@ pub fn input_to_egui(
             state.input.events.push(Event::Key {
                 key,
                 pressed: false,
+                repeat: false,
                 modifiers: state.modifiers,
             });
         }
@@ -272,6 +272,7 @@ pub fn input_to_egui(
             state.input.events.push(Event::Key {
                 key,
                 pressed: true,
+                repeat: true,
                 modifiers: state.modifiers,
             });
 

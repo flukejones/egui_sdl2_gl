@@ -54,10 +54,15 @@ fn main() {
 
     // Init egui stuff
     let (mut painter, mut egui_state) =
-        egui_backend::with_sdl2(&window, ShaderVersion::Default, DpiScaling::Default);
+        egui_backend::with_sdl2(&window, ShaderVersion::Default, DpiScaling::Custom(2.0));
     let egui_ctx = egui::Context::default();
     let mut event_pump: sdl2::EventPump = sdl_context.event_pump().unwrap();
     let mut srgba: Vec<Color32> = Vec::new();
+    
+    // egui_ctx.set_visuals(Visuals {
+    //     window_shadow: Shadow{ extrusion: 10.0, color: Color32::BLACK },
+    //     ..Default::default()
+    //     });
 
     // For now we will just set everything to black, because
     // we will be updating it dynamically later. However, this could just as
@@ -89,11 +94,10 @@ fn main() {
 
         // An example of how OpenGL can be used to draw custom stuff with egui
         // overlaying it:
-        // First clear the background to something nice.
         unsafe {
-            // Clear the screen to green
-            gl::ClearColor(0.3, 0.6, 0.3, 1.0);
-            gl::Clear(gl::COLOR_BUFFER_BIT);
+            // Clear the screen to black
+            gl::ClearColor(0.0, 0.0, 0.2, 1.0);
+            gl::Clear(gl::COLOR_BUFFER_BIT | gl::DEPTH_BUFFER_BIT);
         }
 
         // Then draw our triangle.
@@ -146,7 +150,7 @@ fn main() {
         // Use this only if egui is being used for all drawing and you aren't mixing your own Open GL
         // drawing calls with it.
         // Since we are custom drawing an OpenGL Triangle we don't need egui to clear the background.
-        painter.paint_jobs(None, paint_jobs, &full_output.textures_delta);
+        painter.paint_jobs(None, &paint_jobs, &full_output.textures_delta);
 
         window.gl_swap_window();
 

@@ -5,11 +5,12 @@ use core::mem;
 use core::ptr;
 use core::str;
 use egui::epaint::ImageDelta;
+use egui::epaint::Primitive;
 use egui::TextureId;
 use egui::TexturesDelta;
 use egui::{
     epaint::{Color32, Mesh},
-    vec2, ClippedMesh, Pos2, Rect,
+    vec2, ClippedPrimitive, Pos2, Rect,
 };
 use gl::types::{GLchar, GLenum, GLint, GLsizeiptr, GLsync, GLuint};
 use std::ffi::CString;
@@ -442,14 +443,7 @@ impl Painter {
 
         match &delta.image {
             egui::ImageData::Color(image) => {
-                let mut pixels: Vec<u8> = Vec::with_capacity(image.pixels.len() * 4);
-                for &srgba in &image.pixels {
-                    // let srgba = srgba.;
-                    pixels.push(srgba.r());
-                    pixels.push(srgba.g());
-                    pixels.push(srgba.b());
-                    pixels.push(srgba.a());
-                }
+                let data: Vec<u8> = image.pixels.iter().flat_map(|a| a.to_array()).collect();
 
                 unsafe {
                     gl::BindTexture(gl::TEXTURE_2D, self.egui_texture);
@@ -468,18 +462,21 @@ impl Painter {
                         border,
                         src_format,
                         src_type,
-                        pixels.as_ptr() as *const c_void,
+                        data.as_ptr() as *const c_void,
                     );
                 }
             }
-            egui::ImageData::Alpha(image) => {
-                let data: Vec<u8> = image.srgba_pixels(1.0).flat_map(|a| a.to_array()).collect();
+            egui::ImageData::Font(image) => {
+                let data: Vec<u8> = image
+                    .srgba_pixels(Some(0.2))
+                    .flat_map(|a| a.to_array())
+                    .collect();
 
                 unsafe {
                     gl::BindTexture(gl::TEXTURE_2D, self.egui_texture);
 
                     let level = 0;
-                    let internal_format = gl::RGBA;
+                    let internal_format = gl::RGBA8;
                     let border = 0;
                     let src_format = gl::RGBA;
                     let src_type = gl::UNSIGNED_BYTE;
@@ -546,7 +543,7 @@ impl Painter {
                 }
 
                 let level = 0;
-                let internal_format = gl::RGBA;
+                let internal_format = gl::RGBA8;
                 let border = 0;
                 let src_format = gl::RGBA;
                 let src_type = gl::UNSIGNED_BYTE;
@@ -630,7 +627,7 @@ impl Painter {
     pub fn paint_jobs(
         &mut self,
         bg_color: Option<Color32>,
-        meshes: Vec<ClippedMesh>,
+        meshes: &[ClippedPrimitive],
         texture_deltas: &TexturesDelta,
     ) {
         unsafe {
@@ -663,7 +660,8 @@ impl Painter {
             gl::Enable(gl::FRAMEBUFFER_SRGB);
             gl::Enable(gl::SCISSOR_TEST);
             gl::Enable(gl::BLEND);
-            gl::BlendFunc(gl::ONE, gl::ONE_MINUS_SRC_ALPHA); // premultiplied alpha
+            // gl::BlendFunc(gl::ONE, gl::ONE_MINUS_SRC_ALPHA); // premultiplied alpha
+            gl::BlendFuncSeparate(gl::SRC_ALPHA, gl::ONE_MINUS_SRC_ALPHA, gl::ONE, gl::ONE);
             gl::UseProgram(self.program);
             gl::ActiveTexture(gl::TEXTURE0);
 
@@ -680,37 +678,46 @@ impl Painter {
             let screen_x = canvas_width as f32;
             let screen_y = canvas_height as f32;
 
-            for ClippedMesh(clip_rect, mesh) in meshes {
-                if let Some(texture_id) = self.get_texture(mesh.texture_id) {
-                    gl::BindTexture(gl::TEXTURE_2D, texture_id);
-                    let clip_min_x = pixels_per_point * clip_rect.min.x;
-                    let clip_min_y = pixels_per_point * clip_rect.min.y;
-                    let clip_max_x = pixels_per_point * clip_rect.max.x;
-                    let clip_max_y = pixels_per_point * clip_rect.max.y;
-                    let clip_min_x = clip_min_x.clamp(0.0, x);
-                    let clip_min_y = clip_min_y.clamp(0.0, y);
-                    let clip_max_x = clip_max_x.clamp(clip_min_x, screen_x);
-                    let clip_max_y = clip_max_y.clamp(clip_min_y, screen_y);
-                    let clip_min_x = clip_min_x.round() as i32;
-                    let clip_min_y = clip_min_y.round() as i32;
-                    let clip_max_x = clip_max_x.round() as i32;
-                    let clip_max_y = clip_max_y.round() as i32;
+            for egui::ClippedPrimitive { primitive, clip_rect } in meshes {
+                match primitive {
+                    Primitive::Mesh(mesh) => {
+                        if let Some(texture_id) = self.get_texture(mesh.texture_id) {
+                            gl::BindTexture(gl::TEXTURE_2D, texture_id);
+                            let clip_min_x = pixels_per_point * clip_rect.min.x;
+                            let clip_min_y = pixels_per_point * clip_rect.min.y;
+                            let clip_max_x = pixels_per_point * clip_rect.max.x;
+                            let clip_max_y = pixels_per_point * clip_rect.max.y;
+                            let clip_min_x = clip_min_x.clamp(0.0, x);
+                            let clip_min_y = clip_min_y.clamp(0.0, y);
+                            let clip_max_x = clip_max_x.clamp(clip_min_x, screen_x);
+                            let clip_max_y = clip_max_y.clamp(clip_min_y, screen_y);
+                            let clip_min_x = clip_min_x.round() as i32;
+                            let clip_min_y = clip_min_y.round() as i32;
+                            let clip_max_x = clip_max_x.round() as i32;
+                            let clip_max_y = clip_max_y.round() as i32;
 
-                    //scissor Y coordinate is from the bottom
-                    gl::Scissor(
-                        clip_min_x,
-                        canvas_height as i32 - clip_max_y,
-                        clip_max_x - clip_min_x,
-                        clip_max_y - clip_min_y,
-                    );
+                            //scissor Y coordinate is from the bottom
+                            gl::Scissor(
+                                clip_min_x,
+                                canvas_height as i32 - clip_max_y,
+                                clip_max_x - clip_min_x,
+                                clip_max_y - clip_min_y,
+                            );
 
-                    self.paint_mesh(&mesh);
+                            self.paint_mesh(mesh);
+                        }
+                    }
+                    Primitive::Callback(_) => continue,
                 }
             }
 
             gl::Disable(gl::SCISSOR_TEST);
             gl::Disable(gl::FRAMEBUFFER_SRGB);
             gl::Disable(gl::BLEND);
+        }
+
+        for tex_id in &texture_deltas.free {
+            self.free_user_texture(*tex_id);
         }
     }
 

@@ -1,9 +1,10 @@
 #[cfg(not(feature = "use_epi"))]
 compile_error!("feature \"use_epi\" must be used");
 
+use egui::{Visuals, epaint::Shadow};
 use egui_backend::{
     egui,
-    epi::{App, Frame, IntegrationInfo},
+    epi::{Frame, IntegrationInfo},
     get_frame_time, gl, sdl2,
     sdl2::event::Event,
     sdl2::video::GLProfile,
@@ -14,8 +15,8 @@ use epi::backend::FrameData;
 use std::{sync::Arc, time::Instant};
 // Alias the backend to something less mouthful
 use egui_sdl2_gl as egui_backend;
-const SCREEN_WIDTH: u32 = 800;
-const SCREEN_HEIGHT: u32 = 600;
+const SCREEN_WIDTH: u32 = 1024;
+const SCREEN_HEIGHT: u32 = 768;
 
 fn main() {
     let sdl_context = sdl2::init().unwrap();
@@ -56,19 +57,24 @@ fn main() {
 
     // Init egui stuff
     let (mut painter, mut egui_state) =
-        egui_backend::with_sdl2(&window, ShaderVersion::Default, DpiScaling::Custom(1.25));
-    let mut app = egui_demo_lib::WrapApp::default();
-    let mut egui_ctx = egui::Context::default();
+        egui_backend::with_sdl2(&window, ShaderVersion::Default, DpiScaling::Custom(2.5));
+    let mut app = egui_demo_lib::DemoWindows::default();
+    let egui_ctx = egui::Context::default();
     let mut event_pump = sdl_context.event_pump().unwrap();
     let start_time = Instant::now();
     let repaint_signal = Arc::new(Signal::default());
+    
+    egui_ctx.set_visuals(Visuals {
+        window_shadow: Shadow::NONE,
+        ..Default::default()
+        });
 
     'running: loop {
         egui_state.input.time = Some(start_time.elapsed().as_secs_f64());
         egui_ctx.begin_frame(egui_state.input.take());
         // Begin frame
         let frame_time = get_frame_time(start_time);
-        let mut frame = Frame::new(FrameData {
+        let frame = Frame::new(FrameData {
             info: IntegrationInfo {
                 web_info: None,
                 cpu_usage: Some(frame_time),
@@ -80,7 +86,7 @@ fn main() {
             repaint_signal: repaint_signal.clone(),
         });
 
-        app.update(&egui_ctx, &mut frame);
+        app.ui(&egui_ctx);
         let full_output = egui_ctx.end_frame();
         // Process ouput
         egui_state.process_output(&window, &full_output.platform_output);
@@ -118,7 +124,7 @@ fn main() {
             gl::Clear(gl::COLOR_BUFFER_BIT);
         }
 
-        painter.paint_jobs(None, paint_jobs, &full_output.textures_delta);
+        painter.paint_jobs(None, &paint_jobs, &full_output.textures_delta);
         window.gl_swap_window();
     }
 }

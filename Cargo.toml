@@ -1,8 +1,8 @@
 [package]
 name = "egui_sdl2_gl"
-version = "0.16.0"
-authors = ["Arjun Nair <arjunair@gmail.com>"]
-edition = "2018"
+version = "0.21.0"
+authors = ["Luke Jones <luke@ljones.dev>, Arjun Nair <arjunair@gmail.com>"]
+edition = "2021"
 description = "Backend for Egui to use with sdl2-rs and open gl"
 homepage = "https://github.com/ArjunNair/egui_sdl2_gl"
 license = "MIT"
@@ -15,7 +15,7 @@ include = ["**/*.rs", "Cargo.toml"]
 
 [dependencies]
 gl = "0.14"
-egui = "0.17"
+egui = "0.21"
 sdl2 = "0.35"
 
 [dependencies.epi]
@@ -37,5 +37,8 @@ sdl2_bundled = ["sdl2/bundled"]
 sdl2_static-link = ["sdl2/static-link"]
 use_epi = ["epi"]
 
-[dev-dependencies]
-egui_demo_lib = "0.17"
+# default = ["use_epi"]
+
+[dev-dependencies.egui_demo_lib]
+version = "0.21"
+features = ["syntax_highlighting"]

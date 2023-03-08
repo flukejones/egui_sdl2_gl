@@ -22,7 +22,7 @@ const FS_SRC: &str = "
 out vec4 out_color;
 
 void main() {
-    out_color = vec4(1.0, 1.0, 1.0, 1.0);
+    out_color = vec4(0.6, 0.0, 0.0, 1.0);
 }";
 
 static VERTEX_DATA: [GLfloat; 6] = [0.0, 0.5, 0.5, -0.5, -0.5, -0.5];
@@ -88,8 +88,7 @@ pub fn link_program(vs: GLuint, fs: GLuint) -> GLuint {
         if status != (gl::TRUE as GLint) {
             let mut len: GLint = 0;
             gl::GetProgramiv(program, gl::INFO_LOG_LENGTH, &mut len);
-            let mut buf = Vec::with_capacity(len as usize);
-            buf.set_len((len as usize) - 1); // subtract 1 to skip the trailing null character
+            let mut buf = Vec::with_capacity(len as usize - 1);
             gl::GetProgramInfoLog(
                 program,
                 len,

@@ -39,7 +39,7 @@ fn main() {
     // On linux use GLES SL 100+, like so:
     // let shader_ver = ShaderVersion::Adaptive;
     let (mut painter, mut egui_state) =
-        egui_backend::with_sdl2(&window, shader_ver, DpiScaling::Custom(2.0));
+        egui_backend::with_sdl2(&window, shader_ver, DpiScaling::Custom(2.5));
 
     let egui_ctx = egui::Context::default();
 
@@ -107,7 +107,7 @@ fn main() {
             gl::Clear(gl::COLOR_BUFFER_BIT);
         }
 
-        painter.paint_jobs(None, paint_jobs, &full_output.textures_delta);
+        painter.paint_jobs(None, &paint_jobs, &full_output.textures_delta);
         window.gl_swap_window();
         for event in event_pump.poll_iter() {
             match event {
